@@ -1,0 +1,148 @@
+---
+title: "Geography 13"
+author: "[Anisah Calvin Cuevas](https://acuevas917.github.io/)"
+subtitle: 'Lab 02: COVID-19 Pandemic'
+output:
+  html_document:
+    theme: journal
+---
+### Question 1
+```{r, message=F, warning=F}
+library(tidyverse)
+library(knitr)
+library(readxl)
+library(zoo)
+library(dplyr)
+
+covid19 = read_csv('https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv')
+```
+
+#### California Data
+```{r, message=F, warning=F}
+covid_ca = covid19 %>%
+  filter(state=="California") %>%
+  group_by(county) %>%
+  mutate(newcases = cases - lag(cases)) %>%
+  ungroup()
+```
+
+#### Top 5 Cumulative
+```{r, message=F, warning=F}
+top5cumulative= covid_ca %>%
+  filter(date==max(date)) %>%
+  slice_max(cases, n=5) %>%
+  select(county, cases)
+knitr::kable(top5cumulative,
+             caption = "Most Cumulative Cases California Counties",
+             col.names = c("County", "Cumulative Cases"))
+```
+
+#### Top 5 with New Cases
+```{r, message=F, warning=F}
+top5_newcases = covid_ca %>%
+  filter(date==max(date)) %>%
+  slice_max(newcases, n=5) %>%
+  select(county, newcases)
+knitr::kable(top5_newcases,
+             caption = "Most New Cases California Counties",
+             col.names = c("County", "New Cases"))
+```
+
+```{r, message=F, warning=F}
+pop_est = read_excel("~/github/geog-13-labs/data/PopulationEstimates.xls",
+                     skip=2)
+pop_est = pop_est %>%
+  select_(fips = "FIPStxt", state = "State", "Area_Name", pop2019 = "POP_ESTIMATE_2019")
+pop_joined_covid = inner_join(pop_est, covid_ca, by = "fips")
+cases_percapita = pop_joined_covid %>%
+  filter(date==max(date)-13) %>%
+  mutate(most_percapita = (sum(cases))/pop2019) %>%
+  mutate(new_percapita = ((sum(cases-lag(cases)))/pop2019))
+```
+
+#### Most Cases Per Capita
+```{r, message=F, warning=F}
+most_cumulative_percapita = cases_percapita %>%
+  slice_max(most_percapita, n=5) %>%
+  select(county, most_percapita)
+knitr::kable(most_cumulative_percapita,
+             caption = "Most Cumulative Cases Per Capita California Counties",
+             col.names = c("County", "Cumulative Cases per Capita"))
+```
+
+#### Most New Cases Per 100,000 People
+```{r, message=F, warning=F}
+last14days = pop_joined_covid %>%
+  filter(date>max(date)-14) %>%
+  group_by(county, pop2019) %>%
+  summarise(newcases=sum(newcases)) %>%
+  ungroup() %>%
+  mutate(case_per100k = newcases/(pop2019/100000)) %>%
+  filter(case_per100k<=100)
+knitr::kable(last14days,
+             caption="Counties with Most New Cases")
+```
+
+#### Analysis
+1. Counties with greater area have the most cumulative cases due to a large population
+2. Counties with greater area have the most new cases due to a large population
+3. Counties with lesser area have for cases per capita/100,000 people due to a small population
+
+### Question 2
+#### Rolling Mean Graph
+```{r}
+covid19 %>%
+  group_by(state, date) %>%
+  summarize(cases = sum(cases)) %>%
+  ungroup() %>%
+  filter(state %in% c("New York", "California", "Louisiana", "Florida")) %>%
+  group_by(state) %>%
+  mutate(newCases = cases - lag(cases)) %>%
+  mutate(avg = zoo::rollmean(newCases, 7, fill = NA, allign = "right")) ->
+  covid_step1 
+covid_step1 %>%
+  ggplot(aes(x = date, group = 1)) + 
+  geom_col(aes(y = newCases), col = NA, fill = "#F5B8B5") +
+  geom_line(aes(y = avg), col = "blue", size = 1) + 
+  facet_wrap(~state) + 
+  ggthemes::geom_rangeframe() +
+  labs(title = "Seven Days Average of New Cases",
+       x = "Date", y = "New Cases") + 
+  theme(aspect.ratio = .7)
+```
+
+```{r}
+pop_est %>%
+  select_(fips = "fips", state = "state", "Area_Name", pop2019 = "pop2019") %>%
+  mutate(fips = as.integer(fips)) %>%
+  filter(state %in% c("NY","CA","LA", "FL")) ->
+  new_pop4
+```
+
+
+```{r}
+covid19 %>%
+  filter(state %in% c("New York", "California", "Louisiana", "Florida")) %>%
+  group_by(state)%>%
+  mutate(fips = as.integer(fips)) %>%
+  mutate(newCases = cases - lag(cases)) %>%
+  ungroup() ->
+  new_covid4
+```
+
+```{r}
+right_join(new_covid4, new_pop4, by = "fips") -> covidPop4
+```
+
+```{r}
+covidPop4 %>%
+  group_by(state.x, date) %>%
+  mutate(newCasesPerCapita4 = newCases/pop2019) %>%
+   mutate(avg4 = zoo::rollmean(newCasesPerCapita4, 7, fill = NA, allign = "right"))
+```
+
+#### Analysis
+This graph was scaled by population, and it can be seen that Louisiana's situation seems less dire to California due to differences in population between the states. 
+
+
+
