@@ -143,6 +143,3 @@ covidPop4 %>%
 
 #### Analysis
 This graph was scaled by population, and it can be seen that Louisiana's situation seems less dire to California due to differences in population between the states. 
-
-
-
